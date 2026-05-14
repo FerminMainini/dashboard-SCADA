@@ -1,0 +1,408 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Courier New', monospace; background: #0a0e1a; color: #c8d8e8; }
+  .scada-root { background: #0a0e1a; min-height: 100vh; padding: 0; }
+  .topbar { background: #0d1220; border-bottom: 1px solid #1e3a5f; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar-title { font-size: 13px; font-weight: 700; letter-spacing: 3px; color: #4fc3f7; text-transform: uppercase; }
+  .topbar-status { display: flex; align-items: center; gap: 16px; font-size: 11px; color: #7a9ab8; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #00e676; animation: pulse 1.5s infinite; display: inline-block; margin-right: 4px; }
+  .status-dot.warn { background: #ffab40; }
+  .status-dot.err { background: #ef5350; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+  .grid-main { display: grid; grid-template-columns: 240px 1fr 220px; gap: 0; height: calc(100vh - 44px); }
+  .sidebar-left { background: #0d1220; border-right: 1px solid #1e3a5f; padding: 12px; overflow-y: auto; }
+  .sidebar-right { background: #0d1220; border-left: 1px solid #1e3a5f; padding: 12px; overflow-y: auto; }
+  .center-panel { padding: 12px; overflow-y: auto; background: #0a0e1a; }
+  .panel-label { font-size: 10px; letter-spacing: 2px; color: #4fc3f7; text-transform: uppercase; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #1e3a5f; }
+  .sensor-card { background: #111827; border: 1px solid #1e3a5f; border-radius: 4px; padding: 10px 12px; margin-bottom: 8px; position: relative; overflow: hidden; }
+  .sensor-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+  .sensor-card.blue::before { background: #4fc3f7; }
+  .sensor-card.green::before { background: #00e676; }
+  .sensor-card.amber::before { background: #ffab40; }
+  .sensor-card.red::before { background: #ef5350; }
+  .sensor-name { font-size: 10px; color: #7a9ab8; letter-spacing: 1px; margin-bottom: 4px; }
+  .sensor-value { font-size: 22px; font-weight: 700; font-family: 'Courier New', monospace; }
+  .sensor-value.blue { color: #4fc3f7; }
+  .sensor-value.green { color: #00e676; }
+  .sensor-value.amber { color: #ffab40; }
+  .sensor-value.red { color: #ef5350; }
+  .sensor-unit { font-size: 11px; color: #7a9ab8; margin-left: 4px; }
+  .sensor-bar { height: 3px; background: #1e3a5f; border-radius: 2px; margin-top: 6px; }
+  .sensor-bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+  .sensor-bar-fill.blue { background: #4fc3f7; }
+  .sensor-bar-fill.green { background: #00e676; }
+  .sensor-bar-fill.amber { background: #ffab40; }
+  .sensor-bar-fill.red { background: #ef5350; }
+  .chart-card { background: #111827; border: 1px solid #1e3a5f; border-radius: 4px; padding: 12px; margin-bottom: 10px; }
+  .chart-title { font-size: 10px; letter-spacing: 2px; color: #4fc3f7; margin-bottom: 8px; text-transform: uppercase; }
+  .metric-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+  .metric-box { background: #111827; border: 1px solid #1e3a5f; border-radius: 4px; padding: 10px; text-align: center; }
+  .metric-box-label { font-size: 9px; color: #7a9ab8; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 4px; }
+  .metric-box-val { font-size: 20px; font-weight: 700; color: #e0f0ff; font-family: 'Courier New', monospace; }
+  .metric-box-sub { font-size: 10px; color: #7a9ab8; margin-top: 2px; }
+  .alarm-item { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 3px; margin-bottom: 5px; font-size: 11px; }
+  .alarm-item.crit { background: rgba(239,83,80,0.1); border: 1px solid rgba(239,83,80,0.3); color: #ef9a9a; }
+  .alarm-item.warn { background: rgba(255,171,64,0.1); border: 1px solid rgba(255,171,64,0.3); color: #ffcc80; }
+  .alarm-item.info { background: rgba(79,195,247,0.1); border: 1px solid rgba(79,195,247,0.3); color: #81d4fa; }
+  .alarm-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .alarm-dot.crit { background: #ef5350; animation: pulse 1s infinite; }
+  .alarm-dot.warn { background: #ffab40; }
+  .alarm-dot.info { background: #4fc3f7; }
+  .gauge-container { position: relative; display: flex; align-items: center; justify-content: center; margin: 0 auto; }
+  .control-btn { background: #1e3a5f; border: 1px solid #2d5a8e; color: #4fc3f7; font-family: 'Courier New', monospace; font-size: 11px; padding: 6px 12px; border-radius: 3px; cursor: pointer; letter-spacing: 1px; width: 100%; margin-bottom: 4px; transition: background 0.2s; }
+  .control-btn:hover { background: #2d5a8e; }
+  .control-btn.active { background: #00e676; color: #001a08; border-color: #00e676; }
+  .control-btn.danger { background: rgba(239,83,80,0.2); border-color: #ef5350; color: #ef9a9a; }
+  .control-btn.danger:hover { background: rgba(239,83,80,0.4); }
+  .node-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+  .node { background: #111827; border: 1px solid #1e3a5f; border-radius: 3px; padding: 8px 6px; text-align: center; font-size: 10px; color: #7a9ab8; cursor: pointer; transition: all 0.2s; }
+  .node:hover { border-color: #4fc3f7; color: #4fc3f7; }
+  .node.active { border-color: #00e676; color: #00e676; background: rgba(0,230,118,0.05); }
+  .node.fault { border-color: #ef5350; color: #ef5350; background: rgba(239,83,80,0.05); }
+  .node-icon { font-size: 16px; margin-bottom: 2px; }
+  .mini-chart { width: 100%; height: 40px; }
+  .freq-display { font-size: 28px; font-weight: 700; color: #00e676; font-family: 'Courier New', monospace; text-align: center; margin: 4px 0; }
+  .sep { height: 1px; background: #1e3a5f; margin: 10px 0; }
+</style>
+
+<div class="scada-root">
+  <div class="topbar">
+    <div class="topbar-title">⬡ SCADA · Sistema de Control Industrial</div>
+    <div class="topbar-status">
+      <span><span class="status-dot"></span>EN LÍNEA</span>
+      <span id="clock">--:--:--</span>
+      <span>PLCs: <span style="color:#00e676">4/4</span></span>
+      <span>RTUs: <span style="color:#00e676">12/12</span></span>
+      <span style="color:#ffab40">⚠ 2 ALARMAS</span>
+    </div>
+  </div>
+
+  <div class="grid-main">
+    <div class="sidebar-left">
+      <div class="panel-label">Sensores Activos</div>
+
+      <div class="sensor-card blue">
+        <div class="sensor-name">VOLTAJE L1-L2</div>
+        <div><span class="sensor-value blue" id="v1">220</span><span class="sensor-unit">V AC</span></div>
+        <div class="sensor-bar"><div class="sensor-bar-fill blue" id="v1bar" style="width:73%"></div></div>
+      </div>
+
+      <div class="sensor-card blue">
+        <div class="sensor-name">VOLTAJE L2-L3</div>
+        <div><span class="sensor-value blue" id="v2">219</span><span class="sensor-unit">V AC</span></div>
+        <div class="sensor-bar"><div class="sensor-bar-fill blue" id="v2bar" style="width:73%"></div></div>
+      </div>
+
+      <div class="sensor-card blue">
+        <div class="sensor-name">VOLTAJE L3-L1</div>
+        <div><span class="sensor-value blue" id="v3">221</span><span class="sensor-unit">V AC</span></div>
+        <div class="sensor-bar"><div class="sensor-bar-fill blue" id="v3bar" style="width:74%"></div></div>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="sensor-card green">
+        <div class="sensor-name">CORRIENTE FASE A</div>
+        <div><span class="sensor-value green" id="i1">47</span><span class="sensor-unit">A</span></div>
+        <div class="sensor-bar"><div class="sensor-bar-fill green" id="i1bar" style="width:47%"></div></div>
+      </div>
+
+      <div class="sensor-card green">
+        <div class="sensor-name">CORRIENTE FASE B</div>
+        <div><span class="sensor-value green" id="i2">45</span><span class="sensor-unit">A</span></div>
+        <div class="sensor-bar"><div class="sensor-bar-fill green" id="i2bar" style="width:45%"></div></div>
+      </div>
+
+      <div class="sensor-card green">
+        <div class="sensor-name">CORRIENTE FASE C</div>
+        <div><span class="sensor-value green" id="i3">49</span><span class="sensor-unit">A</span></div>
+        <div class="sensor-bar"><div class="sensor-bar-fill green" id="i3bar" style="width:49%"></div></div>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="sensor-card amber">
+        <div class="sensor-name">TEMPERATURA CPU</div>
+        <div><span class="sensor-value amber" id="temp1">68</span><span class="sensor-unit">°C</span></div>
+        <div class="sensor-bar"><div class="sensor-bar-fill amber" id="temp1bar" style="width:68%"></div></div>
+      </div>
+
+      <div class="sensor-card amber">
+        <div class="sensor-name">TEMP. AMBIENTE</div>
+        <div><span class="sensor-value amber" id="temp2">24</span><span class="sensor-unit">°C</span></div>
+        <div class="sensor-bar"><div class="sensor-bar-fill amber" id="temp2bar" style="width:24%"></div></div>
+      </div>
+    </div>
+
+    <div class="center-panel">
+      <div class="metric-row">
+        <div class="metric-box">
+          <div class="metric-box-label">Potencia Activa</div>
+          <div class="metric-box-val" id="kw">31.5</div>
+          <div class="metric-box-sub">kW</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-box-label">Potencia Reactiva</div>
+          <div class="metric-box-val" id="kvar">8.2</div>
+          <div class="metric-box-sub">kVAR</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-box-label">Factor de Potencia</div>
+          <div class="metric-box-val" id="fp">0.97</div>
+          <div class="metric-box-sub">cos φ</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-box-label">Frecuencia</div>
+          <div class="metric-box-val" id="freq">50.0</div>
+          <div class="metric-box-sub">Hz</div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">Consumo Eléctrico — Últimos 60s</div>
+        <div style="position:relative; height:150px;">
+          <canvas id="powerChart" role="img" aria-label="Gráfica de consumo eléctrico en tiempo real"></canvas>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+        <div class="chart-card">
+          <div class="chart-title">Voltaje 3 Fases</div>
+          <div style="position:relative; height:130px;">
+            <canvas id="voltChart" role="img" aria-label="Voltaje trifásico"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Corriente 3 Fases</div>
+          <div style="position:relative; height:130px;">
+            <canvas id="currChart" role="img" aria-label="Corriente trifásica"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="chart-card">
+          <div class="chart-title">Distribución de Carga</div>
+          <div style="position:relative; height:130px;">
+            <canvas id="loadChart" role="img" aria-label="Distribución de carga por zona"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Energía Acumulada HOY</div>
+          <div style="position:relative; height:130px;">
+            <canvas id="energyChart" role="img" aria-label="Energía acumulada por hora"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-right">
+      <div class="panel-label">Alarmas</div>
+
+      <div class="alarm-item crit">
+        <span class="alarm-dot crit"></span>
+        <span>CRIT · Temp CPU > 85°C<br><span style="font-size:10px;opacity:0.7">PLC-02 · 14:32:07</span></span>
+      </div>
+      <div class="alarm-item warn">
+        <span class="alarm-dot warn"></span>
+        <span>WARN · FP bajo 0.85<br><span style="font-size:10px;opacity:0.7">RTU-07 · 14:29:51</span></span>
+      </div>
+      <div class="alarm-item info">
+        <span class="alarm-dot info"></span>
+        <span>INFO · Reseteo UPS<br><span style="font-size:10px;opacity:0.7">UPS-01 · 14:15:00</span></span>
+      </div>
+
+      <div class="sep"></div>
+      <div class="panel-label">Nodos RTU / PLC</div>
+
+      <div class="node-grid">
+        <div class="node active"><div class="node-icon">⬡</div>PLC-01</div>
+        <div class="node fault"><div class="node-icon">⬡</div>PLC-02</div>
+        <div class="node active"><div class="node-icon">⬡</div>PLC-03</div>
+        <div class="node active"><div class="node-icon">⬡</div>RTU-01</div>
+        <div class="node active"><div class="node-icon">⬡</div>RTU-02</div>
+        <div class="node active"><div class="node-icon">⬡</div>RTU-03</div>
+      </div>
+
+      <div class="sep"></div>
+      <div class="panel-label">Parámetros</div>
+      <div class="sensor-card" style="border-color:#1e3a5f;">
+        <div class="sensor-name">THD VOLTAJE</div>
+        <div><span class="sensor-value" id="thd" style="color:#ce93d8">2.3</span><span class="sensor-unit">%</span></div>
+        <div class="sensor-bar"><div class="sensor-bar-fill" id="thdbar" style="width:23%;background:#ce93d8"></div></div>
+      </div>
+      <div class="sensor-card" style="border-color:#1e3a5f;">
+        <div class="sensor-name">ENERGÍA ACUM. HOY</div>
+        <div><span class="sensor-value" id="kwh" style="color:#80cbc4">147.3</span><span class="sensor-unit">kWh</span></div>
+      </div>
+      <div class="sensor-card" style="border-color:#1e3a5f;">
+        <div class="sensor-name">DEMANDA MÁXIMA</div>
+        <div><span class="sensor-value" id="demanda" style="color:#ffcc02">38.7</span><span class="sensor-unit">kW</span></div>
+      </div>
+
+      <div class="sep"></div>
+      <div class="panel-label">Controles</div>
+      <button class="control-btn active" onclick="toggleSim(this)">▶ SIMULACIÓN ACTIVA</button>
+      <button class="control-btn" onclick="resetAlarms()">⟳ ACK ALARMAS</button>
+      <button class="control-btn danger" onclick="alert('Disparo de emergencia simulado')">⚡ PARADA EMERGENCIA</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const N = 60;
+let simActive = true;
+let t = 0;
+
+function rnd(base, amp) { return +(base + (Math.random()-0.5)*amp).toFixed(1); }
+
+const powerData = Array.from({length:N}, (_,i) => rnd(30 + Math.sin(i/8)*3, 2));
+const voltAData = Array.from({length:N}, (_,i) => rnd(220, 2));
+const voltBData = Array.from({length:N}, (_,i) => rnd(219, 2));
+const voltCData = Array.from({length:N}, (_,i) => rnd(221, 2));
+const currAData = Array.from({length:N}, (_,i) => rnd(47, 3));
+const currBData = Array.from({length:N}, (_,i) => rnd(45, 3));
+const currCData = Array.from({length:N}, (_,i) => rnd(49, 3));
+const labels = Array.from({length:N}, (_,i) => '');
+
+const energyHours = Array.from({length:14}, (_,i) => +((i+1)*10.5 + Math.random()*2 - 1).toFixed(1));
+const energyLabels = Array.from({length:14}, (_,i) => `${i+7}:00`);
+
+const cfg = (type, labels, datasets, options={}) => ({ type, data:{labels, datasets}, options:{responsive:true, maintainAspectRatio:false, animation:{duration:300}, plugins:{legend:{display:false}}, ...options} });
+
+const line = (data, color, fill=false) => ({
+  data, borderColor: color, backgroundColor: fill ? color+'22' : 'transparent',
+  borderWidth: 1.5, pointRadius: 0, tension: 0.4, fill
+});
+
+const powerChart = new Chart(document.getElementById('powerChart'), {
+  type: 'line',
+  data: { labels, datasets: [line(powerData, '#4fc3f7', true)] },
+  options: { responsive:true, maintainAspectRatio:false, animation:{duration:200},
+    plugins:{legend:{display:false}},
+    scales: {
+      x:{display:false},
+      y:{grid:{color:'#1e3a5f'}, ticks:{color:'#7a9ab8',font:{size:10},callback:v=>v+'kW'}, min:20, max:45}
+    }
+  }
+});
+
+const voltChart = new Chart(document.getElementById('voltChart'), {
+  type: 'line',
+  data: { labels, datasets: [line(voltAData,'#4fc3f7'), line(voltBData,'#00e676'), line(voltCData,'#ffab40')] },
+  options: { responsive:true, maintainAspectRatio:false, animation:{duration:200},
+    plugins:{legend:{display:false}},
+    scales:{ x:{display:false}, y:{grid:{color:'#1e3a5f'}, ticks:{color:'#7a9ab8',font:{size:9}}, min:210, max:230} }
+  }
+});
+
+const currChart = new Chart(document.getElementById('currChart'), {
+  type: 'line',
+  data: { labels, datasets: [line(currAData,'#4fc3f7'), line(currBData,'#00e676'), line(currCData,'#ffab40')] },
+  options: { responsive:true, maintainAspectRatio:false, animation:{duration:200},
+    plugins:{legend:{display:false}},
+    scales:{ x:{display:false}, y:{grid:{color:'#1e3a5f'}, ticks:{color:'#7a9ab8',font:{size:9}}, min:30, max:70} }
+  }
+});
+
+const loadChart = new Chart(document.getElementById('loadChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Motores','HVAC','Iluminación','UPS','Otros'],
+    datasets: [{ data:[40,25,15,12,8], backgroundColor:['#4fc3f7','#00e676','#ffab40','#ce93d8','#80cbc4'], borderWidth:1, borderColor:'#111827' }]
+  },
+  options: { responsive:true, maintainAspectRatio:false, cutout:'65%',
+    plugins:{ legend:{ display:true, position:'right', labels:{color:'#7a9ab8',font:{size:9},boxWidth:8,padding:4} } }
+  }
+});
+
+new Chart(document.getElementById('energyChart'), {
+  type: 'bar',
+  data: {
+    labels: energyLabels,
+    datasets: [{ data: energyHours, backgroundColor: energyHours.map((v,i)=>i===energyHours.length-1?'#4fc3f7':'#1e3a5f'), borderRadius:2, borderSkipped:false }]
+  },
+  options: { responsive:true, maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+    scales:{ x:{grid:{display:false},ticks:{color:'#7a9ab8',font:{size:8},maxRotation:0}}, y:{grid:{color:'#1e3a5f'},ticks:{color:'#7a9ab8',font:{size:9},callback:v=>v+'kWh'}} }
+  }
+});
+
+function pushData(arr, val, chart, di) {
+  arr.shift(); arr.push(val);
+  if(chart && chart.data.datasets[di]) chart.data.datasets[di].data = [...arr];
+}
+
+function tick() {
+  if(!simActive) return;
+  t++;
+
+  const vA = rnd(220,3), vB = rnd(219,3), vC = rnd(221,3);
+  const iA = rnd(47,5), iB = rnd(45,5), iC = rnd(49,5);
+  const pw = +((vA*iA + vB*iB + vC*iC)/1000).toFixed(1);
+  const freq = +(50 + (Math.random()-0.5)*0.1).toFixed(2);
+  const fp = +(0.94 + Math.random()*0.05).toFixed(2);
+  const kvar = +(pw * Math.tan(Math.acos(fp))).toFixed(1);
+  const thd = +(2 + Math.random()*1).toFixed(1);
+  const temp1 = rnd(68,4);
+  const temp2 = rnd(24,1);
+
+  document.getElementById('v1').textContent = vA;
+  document.getElementById('v2').textContent = vB;
+  document.getElementById('v3').textContent = vC;
+  document.getElementById('v1bar').style.width = (vA/300*100)+'%';
+  document.getElementById('v2bar').style.width = (vB/300*100)+'%';
+  document.getElementById('v3bar').style.width = (vC/300*100)+'%';
+
+  document.getElementById('i1').textContent = iA;
+  document.getElementById('i2').textContent = iB;
+  document.getElementById('i3').textContent = iC;
+  document.getElementById('i1bar').style.width = (iA/100*100)+'%';
+  document.getElementById('i2bar').style.width = (iB/100*100)+'%';
+  document.getElementById('i3bar').style.width = (iC/100*100)+'%';
+
+  document.getElementById('temp1').textContent = Math.round(temp1);
+  document.getElementById('temp2').textContent = Math.round(temp2);
+  document.getElementById('temp1bar').style.width = temp1+'%';
+  document.getElementById('temp2bar').style.width = temp2+'%';
+
+  document.getElementById('kw').textContent = pw;
+  document.getElementById('kvar').textContent = kvar;
+  document.getElementById('fp').textContent = fp;
+  document.getElementById('freq').textContent = freq;
+  document.getElementById('thd').textContent = thd;
+  document.getElementById('thdbar').style.width = (thd*5)+'%';
+
+  pushData(powerData, pw, powerChart, 0);
+  pushData(voltAData, vA, voltChart, 0);
+  pushData(voltBData, vB, voltChart, 1);
+  pushData(voltCData, vC, voltChart, 2);
+  pushData(currAData, iA, currChart, 0);
+  pushData(currBData, iB, currChart, 1);
+  pushData(currCData, iC, currChart, 2);
+
+  powerChart.update('none');
+  voltChart.update('none');
+  currChart.update('none');
+}
+
+function toggleSim(btn) {
+  simActive = !simActive;
+  btn.textContent = simActive ? '▶ SIMULACIÓN ACTIVA' : '⏸ SIMULACIÓN PAUSADA';
+  btn.classList.toggle('active', simActive);
+}
+
+function resetAlarms() {
+  document.querySelectorAll('.alarm-dot.crit').forEach(d => d.classList.remove('crit'));
+}
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('es-AR');
+}
+
+setInterval(tick, 1000);
+setInterval(updateClock, 1000);
+updateClock();
+</script>
